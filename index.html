@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reproductor DASH (.mpd)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.9.6/shaka-player.compiled.min.js" integrity="sha512-2mX2Y9v0q8mV0m2QF1n5q1e0b7Yq1rU2kqkF0xJ3y0l0w7s1qzv7qg3c5lXz0GkXGv8wLGfMZrNQw3C2C1hcfA==" crossorigin="anonymous"></script>
+  <style>
+    :root { color-scheme: dark light; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0f1115; color:#e7e7e7; }
+    .wrap { max-width: 960px; margin: 24px auto; padding: 16px; }
+    h1 { font-size: 18px; margin: 0 0 12px; font-weight: 600; }
+    .panel { background:#171a21; border:1px solid #2a2f3a; border-radius:12px; padding:16px; }
+    video { width:100%; max-height:70vh; background:#000; border-radius:12px; outline:none; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0 0; }
+    input[type="text"] { flex:1 1 420px; padding:10px 12px; border-radius:10px; border:1px solid #2a2f3a; background:#11151b; color:#e7e7e7; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #2a2f3a; background:#222735; color:#e7e7e7; cursor:pointer; }
+    button:hover { background:#2a3040; }
+    small, #log { opacity:.85 }
+    .hint { margin-top:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>DASH Player (.mpd)</h1>
+    <div class="panel">
+      <video id="video" controls playsinline></video>
+
+      <div class="row" style="margin-top:12px">
+        <!-- Cambiá estas URLs si querés probar otra fuente o tu propio servidor de licencias -->
+        <input id="mpd" type="text"
+               value="https://chromecast.cvattv.com.ar/live/c7eds/America24/SA_Live_dash_enc/America24.mpd"
+               placeholder="URL .mpd" />
+        <input id="lic" type="text" placeholder="LICENSE_URL (Widevine) — dejar vacío si no hay DRM" />
+        <button id="playBtn">Reproducir</button>
+      </div>
+
+      <div class="hint">
+        <small id="log">Listo para cargar.</small>
+      </div>
+      <div class="hint">
+        <small>Consejo: si abrís este archivo en local, usá un servidor (GitHub Pages, Vercel, Netlify o
+          <code>python -m http.server</code>) para evitar CORS.</small>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    shaka.polyfill.installAll();
+
+    async function load() {
+      const video = document.getElementById('video');
+      const mpdUrl = document.getElementById('mpd').value.trim();
+      const licUrl = document.getElementById('lic').value.trim();
+      const log = (m) => document.getElementById('log').textContent = m;
+
+      if (!shaka.Player.isBrowserSupported()) {
+        log('Tu navegador no soporta las APIs necesarias para Shaka Player.');
+        return;
+      }
+
+      const player = new shaka.Player(video);
+      window.player = player;
+
+      player.addEventListener('error', (e) => {
+        console.error('Shaka Error', e.detail || e);
+        log('Error de reproducción: ' + (e.detail ? e.detail.code : e.message || 'desconocido'));
+      });
+
+      // Config DRM sólo si se indicó LICENSE_URL
+      if (licUrl) {
+        player.configure({
+          drm: {
+            servers: { 'com.widevine.alpha': licUrl },
+            // Ajustes opcionales de robustez (algunos dispositivos requieren menos)
+            advanced: {
+              'com.widevine.alpha': { videoRobustness: 'SW_SECURE_DECODE', audioRobustness: 'SW_SECURE_CRYPTO' }
+            }
+            // Si tu proveedor pide cabeceras, agrégalas así:
+            // initDataTransform, requestFilter, etc. (ver docs de Shaka)
+          }
+        });
+      }
+
+      try {
+        log('Cargando manifest…');
+        await player.load(mpdUrl);
+        log('Reproduciendo.');
+        await video.play().catch(() => {/* autoplay puede bloquearse; el usuario puede presionar play */});
+      } catch (err) {
+        console.error(err);
+        log('No se pudo cargar el MPD. Revisa: URL, CORS y (si aplica) LICENSE_URL Widevine.');
+      }
+    }
+
+    document.getElementById('playBtn').addEventListener('click', load);
+
+    // Carga inicial automática
+    load();
+  </script>
+</body>
+</html>
